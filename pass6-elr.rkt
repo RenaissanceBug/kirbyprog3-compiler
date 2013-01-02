@@ -345,7 +345,7 @@ of Lang5.
                     (tag (asgd ,@asgd-ids) (refd ,@refd-ids) ,body))
                  unsafe
                  flags-refd))]
-      [(list 'lambda anything-else ...)
+      [(list (or 'let 'letrec 'lambda) anything-else ...)
        (error 'enforce-letrec-rule
               "expected Lang5 program, but encountered ~s in input program ~s"
               x prog)]
@@ -436,34 +436,35 @@ of Lang5.
     (,(wrap (letrec () (tag (asgd) (refd) '5)))
      ,(wrap (letrec () (tag (asgd) (refd) '5))))
     ; simple tests for let- and lambda-bound vars:
-    (,(wrap (let ([x '1]) x))
-     ,(wrap (let ([x '1]) x)))
-    (,(wrap (let ([x '1]) (cons x x)))
-     ,(wrap (let ([x '1]) (cons x x))))
-    (,(wrap (let ([x '1]) (begin '1 x '2 x '3 x)))
-     ,(wrap (let ([x '1]) (begin '1 x '2 x '3 x))))
-    (,(wrap (let ([x '1]) (+ x (begin (set! x '2) x))))
-     ,(wrap (let ([x '1]) (+ x (begin (set! x '2) x)))))
-    (,(wrap (lambda (x y) (tag (asgd) (refd) (+ (* x x) (* y y)))))
-     ,(wrap (lambda (x y) (tag (asgd) (refd) (+ (* x x) (* y y))))))
+    (,(wrap (let ([x '1]) (tag (asgd) (refd x) x)))
+     ,(wrap (let ([x '1]) (tag (asgd) (refd x) x))))
+    (,(wrap (let ([x '1]) (tag (asgd) (refd x) (cons x x))))
+     ,(wrap (let ([x '1]) (tag (asgd) (refd x) (cons x x)))))
+    (,(wrap (let ([x '1]) (tag (asgd) (refd x) (begin '1 x '2 x '3 x))))
+     ,(wrap (let ([x '1]) (tag (asgd) (refd x) (begin '1 x '2 x '3 x)))))
+    (,(wrap (let ([x '1]) (tag (asgd x) (refd x) (+ x (begin (set! x '2) x)))))
+     ,(wrap (let ([x '1]) (tag (asgd x) (refd x) (+ x (begin (set! x '2) x))))))
+    (,(wrap (lambda (x y) (tag (asgd) (refd x y) (+ (* x x) (* y y)))))
+     ,(wrap (lambda (x y) (tag (asgd) (refd x y) (+ (* x x) (* y y))))))
     (,(wrap (lambda (x y)
-              (tag (asgd) (refd)
+              (tag (asgd x y) (refd x y)
                    (begin (set! x (* x x)) (set! y (* y y)) (+ x y)))))
      ,(wrap (lambda (x y)
-              (tag (asgd) (refd)
+              (tag (asgd x y) (refd x y)
                    (begin (set! x (* x x)) (set! y (* y y)) (+ x y))))))
     (,(wrap (let ([f (lambda (x)
-                       (tag (asgd) (refd) (+ (* '2 x) '1)))])
-              (f '5)))
+                       (tag (asgd) (refd x) (+ (* '2 x) '1)))])
+              (tag (asgd) (refd f) (f '5))))
      ,(wrap (let ([f (lambda (x)
-                       (tag (asgd) (refd) (+ (* '2 x) '1)))])
-              (f '5))))
-    (,(wrap (let ([a '5][f (lambda (x)
-                             (tag (asgd) (refd)
-                                  (+ (* '2 x) '1)))]) (f a)))
-     ,(wrap (let ([a '5][f (lambda (x)
-                             (tag (asgd) (refd) (+ (* '2 x) '1)))])
-              (f a))))
+                       (tag (asgd) (refd x) (+ (* '2 x) '1)))])
+              (tag (asgd) (refd f) (f '5)))))
+    (,(wrap (let ([a '5]
+                  [f (lambda (x) (tag (asgd) (refd x) (+ (* '2 x) '1)))])
+              (tag (asgd) (refd a f)
+                   (f a))))
+     ,(wrap (let ([a '5]
+                  [f (lambda (x) (tag (asgd) (refd x) (+ (* '2 x) '1)))])
+              (tag (asgd) (refd a f) (f a)))))
     ; Test for unsafeness of a set!'s RHS:
     (,(wrap (let ([f '#f])
               (tag (asgd f) (refd f)
@@ -563,19 +564,21 @@ of Lang5.
                      [y '2])
               (tag (asgd) (refd x y)
                    (let ([f1 (car (x))][f2 (cadr (x))])
-                     (cons (f1) (cons (f2) (cons y '())))))))
-     ,(wrap (letrec ([y '2]
-                     [x (letrec ([g (lambda ()
+                     (tag (asgd) (refd f1 f2)
+                          (cons (f1) (cons (f2) (cons y '()))))))))
+     ,(wrap (letrec ([x (letrec ([g (lambda ()
                                       (tag (asgd) (refd) '0))]
                                  [h (lambda ()
                                       (tag (asgd) (refd) y))])
                           (tag (asgd) (refd g h)
                                (lambda ()
                                  (tag (asgd) (refd)
-                                      (cons g (cons h '()))))))])
+                                      (cons g (cons h '()))))))]
+                     [y '2])
               (tag (asgd) (refd x y)
                    (let ([f1 (car (x))][f2 (cadr (x))])
-                     (cons (f1) (cons (f2) (cons y '()))))))))
+                     (tag (asgd) (refd f1 f2)
+                          (cons (f1) (cons (f2) (cons y '())))))))))
 
     ) ;; end compiler-tests/aeq?
   
