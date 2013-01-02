@@ -17,26 +17,29 @@
 (require rackunit)
 
 ;; Form for a test that should pass iff the compiler output evaluates to a
-;; value equal? to the expected value:
+;; value equal? to the value that Racket produces when evaluating the same
+;; expression.  Unlike the other forms below, this form uses quote instead
+;; of quasiquote, since the test program is evaluated without use of eval.
 (define-syntax (compiler-tests/eval=? stx)
   (syntax-case stx ()
-    [(_ compile-fn eval-fn test ...)
-     (with-syntax ([((in out) ...) #'(test ...)])
-       (let ([locs (syntax->list #'(test ...))])
-         (define (make-check loc stx)
-           (syntax-case stx ()
-             [(e1 e2)
-              (with-syntax ([the-check (syntax/loc loc
-                                         (check-equal? e1-out `e2))])
-                #'(let ([e1-out (eval-fn (compile-fn `e1))])
-                    (with-check-info*
-                        (list (make-check-expression
-                               '(check-equal? (compile-fn (eval-fn `e1)) `e2))
-                              (make-check-params (list `e1 `e2)))
-                      (λ () the-check))))]))
-         (with-syntax ([(new-test ...)
-                        (map make-check locs (syntax->list #'((in out) ...)))])
-           #'(begin new-test ...))))]))
+    [(_ compile-fn eval-fn test-expr ...)
+     (let ([make-check
+            (lambda (expr-stx)
+              (with-syntax ([e expr-stx])
+                (with-syntax ([the-check
+                               (syntax/loc expr-stx
+                                 (check-equal? expr-out expected-out))])
+                  #'(let ([expr-out (eval-fn (compile-fn 'e))]
+                          [expected-out e])
+                      (with-check-info*
+                          (list (make-check-expression
+                                 `(check-equal? (eval-fn (compile-fn 'e))
+                                                ,expected-out))
+                                (make-check-params 'expr-stx))
+                        (λ () the-check))))))])
+       (with-syntax ([(new-test ...)
+                      (map make-check (syntax->list #'(test-expr ...)))])
+         #'(begin new-test ...)))]))
 
 
 ;; Form for a sequence of tests that should pass if the compiler output is
