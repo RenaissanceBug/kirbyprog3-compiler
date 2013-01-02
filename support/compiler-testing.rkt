@@ -4,15 +4,68 @@
 
 (provide alpha-equivalent?
          alpha-equivalent/lang5?
+         compiler-tests/eval=?
+         compiler-tests/equal?
          check-aeq?
          compiler-tests/aeq
-         compiler-tests/equal?)
+         )
 (require racket/trace)
 (define DEBUG? #f)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Test shorthand
 
 (require rackunit)
+
+;; Form for a test that should pass iff the compiler output evaluates to a
+;; value equal? to the expected value:
+(define-syntax (compiler-tests/eval=? stx)
+  (syntax-case stx ()
+    [(_ compile-fn eval-fn test ...)
+     (with-syntax ([((in out) ...) #'(test ...)])
+       (let ([locs (syntax->list #'(test ...))])
+         (define (make-check loc stx)
+           (syntax-case stx ()
+             [(e1 e2)
+              (with-syntax ([the-check (syntax/loc loc
+                                         (check-equal? e1-out `e2))])
+                #'(let ([e1-out (eval-fn (compile-fn `e1))])
+                    (with-check-info*
+                        (list (make-check-expression
+                               '(check-equal? (compile-fn (eval-fn `e1)) `e2))
+                              (make-check-params (list `e1 `e2)))
+                      (λ () the-check))))]))
+         (with-syntax ([(new-test ...)
+                        (map make-check locs (syntax->list #'((in out) ...)))])
+           #'(begin new-test ...))))]))
+
+
+;; Form for a sequence of tests that should pass if the compiler output is
+;; equal? to the expected value:
+(define-syntax (compiler-tests/equal? stx)
+  (syntax-case stx ()
+    [(_ this-pass test ...)
+     (with-syntax ([((in out) ...) #'(test ...)])
+       (let ([locs (syntax->list #'(test ...))])
+         (define (make-check loc stx)
+           (syntax-case stx ()
+             [(e1 e2)
+              (with-syntax ([the-check (syntax/loc loc (check-equal? e1-out `e2))])
+                #'(let ([e1-out (this-pass `e1)])
+                    (with-check-info*
+                        (list (make-check-expression
+                               '(check-equal? (this-pass `e1) `e2))
+                              (make-check-params (list `e1 `e2))
+                              (make-check-info 'pass-output e1-out))
+                      (λ () the-check))))]))
+         (with-syntax ([(new-test ...)
+                        (map make-check
+                             locs
+                             (syntax->list #'((in out) ...)))])
+           #'(begin new-test ...))))]))
+
+
+;; The remaining code is for tests that should pass if the compiler output is
+;; alpha-equivalent to the expected value.
 
 (define-simple-check (check-aeq? e1-compiled e2 lang)
   (case lang
@@ -61,28 +114,6 @@
                              locs
                              (syntax->list #'(in  ...))
                              (syntax->list #'(out ...)))])
-           #'(begin new-test ...))))]))
-
-(define-syntax (compiler-tests/equal? stx)
-  (syntax-case stx ()
-    [(_ this-pass test ...)
-     (with-syntax ([((in out) ...) #'(test ...)])
-       (let ([locs (syntax->list #'(test ...))])
-         (define (make-check loc stx)
-           (syntax-case stx ()
-             [(e1 e2)
-              (with-syntax ([the-check (syntax/loc loc (check-equal? e1-out `e2))])
-                #'(let ([e1-out (this-pass `e1)])
-                    (with-check-info*
-                        (list (make-check-expression
-                               '(check-equal? (this-pass `e1) `e2))
-                              (make-check-params (list `e1 `e2))
-                              (make-check-info 'pass-output e1-out))
-                      (λ () the-check))))]))
-         (with-syntax ([(new-test ...)
-                        (map make-check
-                             locs
-                             (syntax->list #'((in out) ...)))])
            #'(begin new-test ...))))]))
 
 
