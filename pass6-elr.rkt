@@ -2,7 +2,6 @@
 
 (require "support/helpers.rkt"
          "support/env.rkt"
-         racket/trace
          )
 
 (provide pass6 enforce-letrec-rule)
@@ -611,3 +610,4 @@ variable, then the RHS of that variable's binding is safe.
 Proof by induction on the number of let/letrec forms contained in the RHS of a
 decl?
 |#
+

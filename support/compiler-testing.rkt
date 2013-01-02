@@ -20,7 +20,7 @@
     [(lang5) (alpha-equivalent/lang5? e1-compiled e2)]
     [(lang6) (alpha-equivalent/lang6? e1-compiled e2)]))
 
-(define-for-syntax ((compile/check-aeq? this-pass [lang 'lang1]) loc e1 e2)
+(define-for-syntax ((compile/check-aeq? this-pass [lang ''lang1]) loc e1 e2)
   (with-syntax ([e1 e1][e2 e2][e1-out #'e1-out][lang lang])
     (with-syntax ([the-check
                    (syntax/loc loc (check-aeq? e1-out `e2 lang))]
