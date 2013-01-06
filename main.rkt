@@ -8,13 +8,16 @@
          "pass5-uncover.rkt"
          "pass6-elr.rkt"
          "pass7-remove-impure-letrec.rkt"
+         "pass8-box-settables.rkt"
+         "pass9-sanitize-binding.rkt"
          )
 
 (provide compile)
 
 (define compile
   (apply compose
-         (reverse (list pass1 pass2 pass3 pass4 pass5 pass6 pass7))))
+         (reverse (list pass1 pass2 pass3 pass4 pass5 pass6 pass7 pass8
+                        pass9))))
 
 (module+ test
   (require rackunit)
@@ -82,5 +85,13 @@
                  (g))]
             [y '2])
      (cons x (cons y '()))))
+
+  (define-syntax-rule (check-arity-violation? expr)
+    (check-exn #rx"arity mismatch" (lambda () (compile 'expr))))
+
+  (check-arity-violation? ((lambda () 1) 2))
+  (check-arity-violation? ((lambda (x y z) (* x y z)) 1 2))
+  (check-arity-violation? (letrec ()
+                            ((lambda (pi r) (* 2 pi r)) 2 3.14 10)))
   )
 
