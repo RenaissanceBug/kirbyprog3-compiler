@@ -72,9 +72,10 @@
 
 (define-simple-check (check-aeq? e1-compiled e2 lang)
   (case lang
-    [(lang1 lang2 lang3) (alpha-equivalent? e1-compiled e2)]
-    [(lang5) (alpha-equivalent/lang5? e1-compiled e2)]
-    [(lang6) (alpha-equivalent/lang6? e1-compiled e2)]))
+    [(lang1 lang2 lang3) (alpha-equivalent?         e1-compiled e2)]
+    [(lang5)             (alpha-equivalent/lang5?   e1-compiled e2)]
+    [(lang6)             (alpha-equivalent/lang6?   e1-compiled e2)]
+    [(lang7 lang8)       (alpha-equivalent/lang7-8? e1-compiled e2)]))
 
 (define-for-syntax ((compile/check-aeq? this-pass [lang ''lang1]) loc e1 e2)
   (with-syntax ([e1 e1][e2 e2][e1-out #'e1-out][lang lang])
@@ -584,6 +585,98 @@
       [(list 'let '() stx-def e) e]))
   
   (aeq? (unwrap prog1) (unwrap prog2) (empty-env) empty))
+
+
+;; alpha-equivalent/lang7-8? : Lang7/8:Prog Lang7/8:Prog -> Boolean
+#| Lang7 grammar:
+         <Prog> ::= <Exp>
+      
+          <Exp> ::= (begin <NB-Exp> <NB-Exp>+)
+                  | <NB-Exp>
+
+       <NB-Exp> ::= (quote <Lit>)
+                  | <Var>
+                  | (if <Exp> <Exp> <Exp>)
+                  | (let ( (<Var> <Exp>)*) <Exp>)
+                  | (letrec ( (<Var> (lambda (<Var>*) <Exp>))* ) <Exp>)
+                  | (lambda (<Var>*) <Exp>)
+                  | (<Prim> <Exp>*)
+                  | (<Exp> <Exp>*)
+Lang8 is a subset of Lang7.
+|#
+(define (alpha-equivalent/lang7-8? prog1 prog2)
+  ;; aeq? : Exp Exp Env[Sym => Sym] Listof[Sym] -> Boolean
+  ;; env maps bound variables of e1 to bound variables of e2.
+  ;; e2-bound-ids is the list of all variables in scope at the current point
+  ;; in e2.
+  (define (aeq? e1 e2 env e2-bound-ids)
+    (match (list e1 e2)
+      [(list (list 'begin b bs ...)
+             (list 'begin b2 bs2 ...))
+       (and (aeq/nb-exp? b b2 env e2-bound-ids)
+            (= (length bs) (length bs2))
+            (andmap (curryr aeq/nb-exp? env e2-bound-ids) bs bs2))]
+      [otherwise (aeq/nb-exp? e1 e2 env e2-bound-ids)]))
+  
+  ;; aeq-nb-exp? : Lang6:NB-Exp Lang6:NB-Exp Env[Sym => Sym] Listof[Sym] -> Bool
+  (define (aeq/nb-exp? e1 e2 env e2-bound-ids)
+    (define recur-aeq? (curryr aeq? env e2-bound-ids)) ; convenience
+    
+    (match (list e1 e2)
+      [(list (list 'quote x1) (list 'quote x2)) (equal? x1 x2)]
+      [(list (? symbol? x1) (? symbol? x2))     (id=? x1 x2 env e2-bound-ids)]
+      [(list (list 'set! (? symbol? lhs) rhs)
+             (list 'set! (? symbol? lhs2) rhs2))
+       (and (id=? lhs lhs2 env e2-bound-ids)
+            (recur-aeq? rhs rhs2))]
+      [(list (list 'if test thn els)
+             (list 'if test2 thn2 els2))
+       (and (recur-aeq? test test2)
+            (recur-aeq? thn thn2)
+            (recur-aeq? els els2))]
+      [(list (list 'let (list (list (? symbol? lhs)  rhs) ...)  b1)
+             (list 'let (list (list (? symbol? lhs2) rhs2) ...) b2))
+       (and (= (length lhs) (length lhs2))
+            (let ([env (extend-env lhs lhs2 env)]
+                  [e2-bound-ids (append lhs2 e2-bound-ids)])
+              ;; note that now, the recur-aeq? bound above no longer refers to
+              ;; the env and e2-bound-ids in scope here!  Hence we can use
+              ;; recur-aeq? on the RHSs here:
+              (and (andmap recur-aeq? rhs rhs2)
+                   (aeq? b1 b2 env e2-bound-ids))))]
+      [(list (list 'letrec (list (list (? symbol? lhs)  rhs)  ...) b1)
+             (list 'letrec (list (list (? symbol? lhs2) rhs2) ...) b2))
+       (and (= (length lhs) (length lhs2))
+            (let ([env (extend-env lhs lhs2 env)]
+                  [e2-bound-ids (append lhs2 e2-bound-ids)])
+              ;; note that now, the recur-aeq? bound above no longer refers to
+              ;; the env and e2-bound-ids in scope here!  Hence the direct use
+              ;; of aeq? here:
+              (and (andmap (curryr aeq? env e2-bound-ids) rhs rhs2)
+                   (aeq? b1 b2 env e2-bound-ids))))]
+      [(list (list 'lambda (list (? symbol? formals)  ...) b1)
+             (list 'lambda (list (? symbol? formals2) ...) b2))
+       (let ([env (extend-env formals formals2 env)]
+             [e2-bound-ids (append formals2 e2-bound-ids)])
+         (and (= (length formals) (length formals2))
+              (aeq? b1 b2 env e2-bound-ids)))]
+      [(list (list (? primitive? prim)  args  ...)
+             (list (? primitive? prim2) args2 ...))
+       (and (eq? prim prim2)
+            (= (length args) (length args2))
+            (andmap recur-aeq?
+                    args
+                    args2))]
+      [(list (list proc  args  ...)
+             (list proc2 args2 ...))
+       (and (aeq? proc proc2 env e2-bound-ids)
+            (= (length args) (length args2))
+            (andmap recur-aeq? args args2))]
+      [something-else #f]))
+    (when DEBUG? (trace aeq? aeq/nb-exp?))
+
+  (aeq? prog1 prog2 (empty-env) empty))
+
 
 ;; id=? : Sym Sym Env[Sym => Sym] Listof[Sym] -> Boolean
 ;; true iff id1 and id2 are both free and equal or both bound at

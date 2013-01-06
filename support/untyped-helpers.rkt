@@ -1,6 +1,6 @@
 #lang racket
 
-(provide build-begin)
+(provide build-begin unwrap)
 
 ;; NEListof[Expr] -> Expr
 ;; Converts the list of exprs to a begin-expression with no immediately-nested
@@ -15,3 +15,14 @@
      (append e* ls)]
     [e
      (cons e ls)]))
+
+
+;; unwrap : Prog -> Exp
+;; Remove the definition wrapper from a program; i.e., transform
+;;   (let () <Defs> ... <Exp>)
+;; into
+;;   <Exp>
+(define (unwrap prog)
+  (match prog
+    [(list 'let '() stx-def e) e]))
+
