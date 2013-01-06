@@ -4,6 +4,8 @@
 
 (provide alpha-equivalent?
          alpha-equivalent/lang5?
+         alpha-equivalent/lang6?
+         alpha-equivalent/lang7-8?
          compiler-tests/eval=?
          compiler-tests/equal?
          check-aeq?
