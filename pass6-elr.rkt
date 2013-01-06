@@ -325,7 +325,7 @@ of Lang5.
                                                       (seteq) (seteq))])
                (values (if (set-member? refd/R* valid?)
                            `(let ([,valid? '#f])
-                              (tag (asgd) (refd ,valid?)
+                              (tag (asgd ,valid?) (refd ,valid?)
                                    (letrec ,processed-decls
                                      (tag (asgd ,@asgd-ids) (refd ,@refd-ids)
                                           (begin (set! ,valid? '#t)
@@ -478,7 +478,7 @@ of Lang5.
      ,(wrap (let ([f '#f])
               (tag (asgd f) (refd f)
                    (let ([valid?0 '#f])
-                     (tag (asgd) (refd valid?0)
+                     (tag (asgd valid?0) (refd valid?0)
                           (letrec ([y '0]
                                    [x (begin 
                                         (set! f
@@ -504,7 +504,7 @@ of Lang5.
      ,(wrap (let ([v (make-vector '1)])
               (tag (asgd) (refd v)
                    (let ([valid?0 '#f])
-                     (tag (asgd) (refd valid?0)
+                     (tag (asgd valid?0) (refd valid?0)
                           (letrec ([y '1]
                                    [x (begin
                                         (vector-set!
@@ -542,7 +542,7 @@ of Lang5.
               (tag (asgd) (refd x y)
                    (cons x (cons y '())))))
      ,(wrap (let ([valid?0 '#f])
-              (tag (asgd) (refd valid?0)
+              (tag (asgd valid?0) (refd valid?0)
                    (letrec ([y '2]
                             [x (letrec ([h (lambda ()
                                              (tag (asgd) (refd)
