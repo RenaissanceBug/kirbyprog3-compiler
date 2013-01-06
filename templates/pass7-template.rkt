@@ -1,6 +1,7 @@
 #lang racket
 
 (require "support/helpers.rkt"
+         "support/untyped-helpers.rkt"
          "support/env.rkt")
 
 (provide pass7 remove-impure-letrec)
@@ -156,7 +157,7 @@ The output language is Lang6:
       [(list 'set! (? symbol? id) rhs)
        #f]
       [(list 'if test e1 e2)
-       `(if ,(ril test) ,(ril e1) ,(ril e2))]
+       `(if ,(recur test) ,(recur e1) ,(recur e2))]
       [(list 'let (list (and (list (? symbol? Ls) Rs) decls)
                         ...)
              (list 'tag (list 'asgd asgd-ids ...) (list 'refd refd-ids ...)
@@ -185,22 +186,6 @@ The output language is Lang6:
        (error 'remove-impure-letrec
               "expected Lang5 program, but encountered ~s in input program ~s"
               x prog)])
-
-  ;; Following are two helpers you will find useful:
-  
-  ;; NE-Listof[Lang6:Exp] -> Lang6:Exp
-  ;; Produces a single begin-expression from the given sub-expressions.
-  ;; Use this every time you create a begin-expr from exprs that result
-  ;; from recursion (and that hence aren't known to be NB-Exps).
-  (define (build-begin es)
-    (let ([es
-           (for/fold ([exps empty]) ([e (reverse es)])
-             (match e
-               [(list 'begin e* ...) (append e* exps)]
-               [otherwise (cons e exps)]))])
-      (if (empty? (cdr es))
-          (car es)
-          `(begin ,@es))))
 
   ;; NEList[Id] NEList[Lang6:Exp] NEList[Id] -> Lang6:NB-Exp
   ;; constructs the let-expression that binds the temps and contains the set!s
@@ -329,12 +314,12 @@ The output language is Lang6:
     ) ;; end of tests that can be decided w/o alpha-equivalent?.
 
   (compiler-tests/aeq remove-impure-letrec
-    lang5
+    lang6
     ;; Imperative factorial -- with all types of bindings:
-    (,(wrap (letrec ([c '5]         ; simple
-                     [unused '8]    ; unreferenced
-                     [*n* '0]       ; complex (assigned)
-                     [*acc* '100]   ; complex (assigned)
+    (,(wrap (letrec ([c '5]
+                     [unused '8]
+                     [*n* '0]
+                     [*acc* '100]
                      [!-help
                       (lambda ()
                         (tag (asgd) (refd)
@@ -370,8 +355,9 @@ The output language is Lang6:
                      (begin '8
                             (let ([*n*0 '0]
                                   [*acc*0 '100])
-                              (begin (set! *n* *n*0)
-                                     (set! *acc* *acc*0)))
+                              (settable ()
+                                (begin (set! *n* *n*0)
+                                       (set! *acc* *acc*0))))
                             (! c))))))))
     )
   )
